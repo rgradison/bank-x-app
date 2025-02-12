@@ -1,10 +1,12 @@
 package io.absa.bankxapp.service;
 
 import io.absa.bankxapp.model.Account;
+import io.absa.bankxapp.model.AccountType;
 import io.absa.bankxapp.model.Transaction;
 import io.absa.bankxapp.repository.AccountsRepository;
 import io.absa.bankxapp.repository.TransactionRepository;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -21,6 +23,7 @@ public class TransactionService {
         this.transactionRepository = transactionRepository;
     }
 
+    @Transactional
     public void transferBetweenAccounts(Long fromAccountId, Long toAccountId, BigDecimal amount) {
         if(amount.compareTo(BigDecimal.ZERO) <= 0) {
             throw new IllegalArgumentException("Transfer Amount must be greater than zero");
@@ -43,9 +46,9 @@ public class TransactionService {
 
         accountsRepository.save(fromAccount);
         accountsRepository.save(toAccount);
-
     }
 
+    //Records a transction in a database
     private void recordTransaction(Account account, BigDecimal amount, String description) {
         Transaction transaction = new Transaction();
         transaction.setAccount(account);
@@ -55,10 +58,31 @@ public class TransactionService {
         transactionRepository.save(transaction);
    }
 
+   @Transactional
     public void makePayment(Long accountId, BigDecimal amount, String description) {
+        if(amount.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new IllegalArgumentException("Payment Amount must be greater than zero");
+        }
+
+        Account account = accountsRepository.findById(accountId)
+                .orElseThrow(() -> new IllegalArgumentException("Account not found"));
+
+       if(account.getAccountType() != AccountType.CURRENT){
+           throw new IllegalArgumentException("Payments can only be made from current account,Account type is not current");
+       }
+
+       BigDecimal transactionFee = amount.multiply(BigDecimal.valueOf(0.0005));
+       account.debit(amount, transactionFee);
+
+       recordTransaction(account, amount.negate(), description + " (Transaction Fee: " + transactionFee + ")");
+       accountsRepository.save(account);
     }
 
+    @Transactional(readOnly = true)
     public List<Transaction> getTransactionHistory(Long accountId) {
-        return List.of();
+        Account account = accountsRepository.findById(accountId).
+                orElseThrow(() -> new IllegalArgumentException("Account not found."));
+        return transactionRepository.findByAccount(account);
+
     }
 }

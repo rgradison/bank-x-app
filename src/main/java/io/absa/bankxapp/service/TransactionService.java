@@ -2,6 +2,7 @@ package io.absa.bankxapp.service;
 
 import io.absa.bankxapp.model.Account;
 import io.absa.bankxapp.model.AccountType;
+import io.absa.bankxapp.model.NotificationType;
 import io.absa.bankxapp.model.Transaction;
 import io.absa.bankxapp.repository.AccountsRepository;
 import io.absa.bankxapp.repository.TransactionRepository;
@@ -17,10 +18,15 @@ public class TransactionService {
 
     private final AccountsRepository accountsRepository;
     private final TransactionRepository transactionRepository;
+    private  final NotificationService notificationService;
 
-    public TransactionService(AccountsRepository accountsRepository, TransactionRepository transactionRepository) {
+    public TransactionService(AccountsRepository accountsRepository,
+                              TransactionRepository transactionRepository,
+                              NotificationService notificationService
+                              ) {
         this.accountsRepository = accountsRepository;
         this.transactionRepository = transactionRepository;
+        this.notificationService = notificationService;
     }
 
     @Transactional
@@ -29,10 +35,8 @@ public class TransactionService {
             throw new IllegalArgumentException("Transfer Amount must be greater than zero");
         }
 
-        Account fromAccount = accountsRepository.findById(fromAccountId).
-                orElseThrow(() -> new IllegalArgumentException("From account not found"));
-        Account toAccount = accountsRepository.findById(toAccountId).
-                orElseThrow(() -> new IllegalArgumentException("To account not found"));
+        Account fromAccount = accountsRepository.findById(fromAccountId).orElseThrow(() -> new IllegalArgumentException("From account not found"));
+        Account toAccount = accountsRepository.findById(toAccountId).orElseThrow(() -> new IllegalArgumentException("To account not found"));
 
         if(fromAccount.getCustomer().getId() != toAccount.getCustomer().getId()) {
             throw new IllegalArgumentException("From account and To account don't match");
@@ -46,6 +50,13 @@ public class TransactionService {
 
         accountsRepository.save(fromAccount);
         accountsRepository.save(toAccount);
+
+        // Send notifications
+        notificationService.sendNotification(fromAccount.getCustomer(), NotificationType.TRANSACTION_SUCCESS,
+                "You have transferred " + amount + " to account " + toAccountId);
+        notificationService.sendNotification(toAccount.getCustomer(), NotificationType.PAYMENT_RECEIVED,
+                "You have received " + amount + " from account " + fromAccountId);
+
     }
 
     //Records a transction in a database
@@ -76,6 +87,7 @@ public class TransactionService {
 
        recordTransaction(account, amount.negate(), description + " (Transaction Fee: " + transactionFee + ")");
        accountsRepository.save(account);
+
     }
 
     @Transactional(readOnly = true)

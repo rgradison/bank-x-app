@@ -16,6 +16,6 @@ public class CustomerController {
     @PostMapping("/onboard")
     public Customer onboardCustomer(@RequestParam String name, @RequestParam String email) {
         return customerService.onboardCustomer(name, email);
-    }
 
+    }
 }
